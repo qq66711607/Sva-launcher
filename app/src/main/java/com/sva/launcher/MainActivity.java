@@ -365,7 +365,7 @@ public final class MainActivity extends Activity {
             matches++;
         }
         if (matches == 1) playChannel(fallback);
-        else Toast.makeText(this, "That reminder channel is no longer available.", Toast.LENGTH_LONG).show();
+        else TToast.makeText(this, "That reminder channel is no longer available.", Toast.LENGTH_LONG).show();
     }
 
     private void openGameLibrary() {
@@ -401,7 +401,7 @@ public final class MainActivity extends Activity {
     }
 
     private void exportBackup(Uri destination) {
-        Toast.makeText(this, "Creating launcher backup…", Toast.LENGTH_SHORT).show();
+        TToast.makeText(this, "Creating launcher backup…", Toast.LENGTH_SHORT).show();
         Thread worker = new Thread(() -> {
             String error = null;
             try {
@@ -416,7 +416,7 @@ public final class MainActivity extends Activity {
                 error = e.getMessage() == null ? "Could not create the backup." : e.getMessage();
             }
             String result = error;
-            lifecycleWork.post(() -> Toast.makeText(this,
+            lifecycleWork.post(() -> TToast.makeText(this,
                     result == null ? "Backup saved." : "Backup failed: " + result,
                     result == null ? Toast.LENGTH_SHORT : Toast.LENGTH_LONG).show());
         }, "launcher-backup-export");
@@ -426,7 +426,7 @@ public final class MainActivity extends Activity {
 
     private void importBackup(Uri source) {
         restoringBackup = true;
-        Toast.makeText(this, "Restoring launcher backup…", Toast.LENGTH_SHORT).show();
+        TToast.makeText(this, "Restoring launcher backup…", Toast.LENGTH_SHORT).show();
         Thread worker = new Thread(() -> {
             String error = null;
             try (java.io.InputStream input = getContentResolver().openInputStream(source)) {
@@ -450,7 +450,7 @@ public final class MainActivity extends Activity {
             lifecycleWork.post(() -> {
                 restoringBackup = false;
                 if (result != null) {
-                    Toast.makeText(this, "Restore failed: " + result, Toast.LENGTH_LONG).show();
+                    TToast.makeText(this, "Restore failed: " + result, Toast.LENGTH_LONG).show();
                     return;
                 }
                 hiddenChannelKeys.clear();
@@ -468,7 +468,7 @@ public final class MainActivity extends Activity {
                         settingsScreen.channelAdapter.refresh();
                     }
                 }
-                Toast.makeText(this, "Backup restored.", Toast.LENGTH_SHORT).show();
+                TToast.makeText(this, "Backup restored.", Toast.LENGTH_SHORT).show();
                 recreate();
             });
         }, "launcher-backup-import");
@@ -715,7 +715,7 @@ public final class MainActivity extends Activity {
         timeStack.setOrientation(LinearLayout.VERTICAL);
         timeStack.setGravity(Gravity.CENTER_VERTICAL);
         timeStack.setPadding(0, 0, 0, 0);
-        clock = new TextView(this);
+        clock = new TTextView(this);
         clock.setTextColor(light ? LiquidTheme.text(this) : Color.WHITE);
         // Keep the clock deliberately distinct from the compact Manrope UI copy.
         // The wider medium face remains easy to read from across the room.
@@ -1398,6 +1398,51 @@ public final class MainActivity extends Activity {
         return false;
     }
 
+
+    /**
+     * 按屏幕坐标在面板内找「下一个」可聚焦控件。
+     *
+     * 为什么需要它：设置页的内容在 ScrollView 里，可视区之外的控件不会被 focusSearch 当作候选，
+     * 于是从最后一个可见控件按 DOWN 时，搜索会跳到左边导航栏（几何上确实更近），
+     * 调用方看到"目标不在面板内"就把按键吞掉了 —— 焦点看起来卡死。
+     * 这里绕开 focusSearch，直接遍历面板子树按位置挑，requestFocus 之后 ScrollView 自己会滚过去。
+     */
+    private View geometricNextInPage(View from, View page, int direction) {
+        if (from == null || page == null) return null;
+        int[] origin = new int[2];
+        from.getLocationOnScreen(origin);
+        final int fromY = origin[1] + from.getHeight() / 2;
+        final int fromX = origin[0] + from.getWidth() / 2;
+        final int threshold = dp(4);
+        boolean vertical = direction == View.FOCUS_UP || direction == View.FOCUS_DOWN;
+        View best = null;
+        int bestDelta = Integer.MAX_VALUE, bestCross = Integer.MAX_VALUE;
+        java.util.ArrayList<View> stack = new java.util.ArrayList<>();
+        stack.add(page);
+        int[] loc = new int[2];
+        while (!stack.isEmpty()) {
+            View v = stack.remove(stack.size() - 1);
+            if (v != from && v != page && v.getVisibility() == View.VISIBLE
+                    && v.isFocusable() && v.isEnabled() && v.getWidth() > 0 && v.getHeight() > 0) {
+                v.getLocationOnScreen(loc);
+                int cy = loc[1] + v.getHeight() / 2;
+                int cx = loc[0] + v.getWidth() / 2;
+                int delta = vertical ? (direction == View.FOCUS_DOWN ? cy - fromY : fromY - cy)
+                        : (direction == View.FOCUS_RIGHT ? cx - fromX : fromX - cx);
+                if (delta > threshold) {
+                    int cross = vertical ? Math.abs(cx - fromX) : Math.abs(cy - fromY);
+                    if (delta < bestDelta || (delta == bestDelta && cross < bestCross)) {
+                        best = v; bestDelta = delta; bestCross = cross;
+                    }
+                }
+            }
+            if (v instanceof android.view.ViewGroup) {
+                android.view.ViewGroup group = (android.view.ViewGroup) v;
+                for (int i = 0; i < group.getChildCount(); i++) stack.add(group.getChildAt(i));
+            }
+        }
+        return best;
+    }
     private boolean isWithinPage(View child, View page) {
         for (View current = child; current != null; ) {
             if (current == page) return true;
@@ -1749,7 +1794,7 @@ public final class MainActivity extends Activity {
     private void updateCalendarHeader(LocalDate day) {
         if (calendarHeaderDate == null) return;
         calendarHeaderDate.setText(day.format(java.time.format.DateTimeFormatter.ofPattern(
-                "EEEE, d MMM", Locale.getDefault())).toUpperCase(Locale.getDefault()));
+                Lang.pattern("EEEE, d MMM"), Lang.locale())).toUpperCase(Locale.getDefault()));
         ArrayList<String> titles = new ArrayList<>();
         ZoneId zone = ZoneId.systemDefault();
         for (PublicCalendarRepository.Event event : cachedCalendarEvents()) {
@@ -2257,7 +2302,7 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
     }
 
     private TextView label(String value, float size, int color, boolean bold) {
-        TextView v = new TextView(this);
+        TextView v = new TTextView(this);
         v.setText(value);
         v.setTextSize(size);
         if (LiquidTheme.isLight(this)) {
@@ -2272,7 +2317,7 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
     }
 
     private Button actionButton(String text) {
-        Button b = new Button(this);
+        Button b = new TButton(this);
         b.setText(text);
         b.setTypeface(LiquidTheme.font(this));
         b.setTextSize(14);
@@ -2300,8 +2345,8 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
         boolean twentyFour = preferences.getBoolean("24h", false);
         Date now = new Date();
         DateFormat time = android.text.format.DateFormat.getTimeFormat(this);
-        if (twentyFour) time = new java.text.SimpleDateFormat("HH:mm", Locale.getDefault());
-        else time = new java.text.SimpleDateFormat("h:mm a", Locale.getDefault());
+        if (twentyFour) time = new java.text.SimpleDateFormat("HH:mm", Lang.locale());
+        else time = new java.text.SimpleDateFormat("h:mm a", Lang.locale());
         String formattedTime = time.format(now);
         String period = "";
         int suffixStart = twentyFour ? -1 : formattedTime.lastIndexOf(' ');
@@ -2322,7 +2367,7 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
         clockDivider.setVisibility(View.GONE);
         date.setVisibility(preferences.getBoolean("showDate", true)
                 ? View.VISIBLE : View.GONE);
-        date.setText(new java.text.SimpleDateFormat("EEE, dd MMM yyyy", Locale.getDefault()).format(now).toUpperCase(Locale.getDefault()));
+        date.setText(new java.text.SimpleDateFormat(Lang.pattern("EEE, dd MMM yyyy"), Lang.locale()).format(now).toUpperCase(Locale.getDefault()));
     }
 
     private void updateNowPlaying() {
@@ -2398,7 +2443,7 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
         try {
             startActivity(new Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
         } catch (android.content.ActivityNotFoundException missing) {
-            Toast.makeText(this, "Open Android Settings and allow Sva Now Playing notification access.",
+            TToast.makeText(this, "Open Android Settings and allow Sva Now Playing notification access.",
                     Toast.LENGTH_LONG).show();
         }
     }
@@ -2485,7 +2530,7 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
                 R.style.SvaDeviceAlertDialogTheme))
                 .setTitle(weatherForecast.location)
                 .setMessage(details.length() > 0 ? details.toString() : "Forecast unavailable")
-                .setPositiveButton("Close", null)
+                .setPositiveButton(Lang.t("Close"), null)
                 .create();
         Motion.dialog(dialog); dialog.show();
         styleDialog(dialog);
@@ -2675,7 +2720,7 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
         } else if (nextEvent != null) {
             homeCalendarEyebrow.setText("UP NEXT");
             homeCalendarTitle.setText(nextEvent.title);
-            homeCalendarSubtitle.setText(new java.text.SimpleDateFormat("EEE · h:mm a", Locale.getDefault())
+            homeCalendarSubtitle.setText(new java.text.SimpleDateFormat(Lang.pattern("EEE · h:mm a"), Lang.locale())
                     .format(new Date(nextEvent.startMs)));
         } else {
             homeCalendarEyebrow.setText("TODAY");
@@ -2787,12 +2832,12 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
                     saveCalendarEvents(resultEvents);
                     updateCalendarEventDisplay();
                     if (settingsScreen != null) settingsScreen.onCalendarRefreshResult(
-                            "Calendar refreshed · " + resultEvents.size() + " events cached.");
+                            Lang.calendarRefreshed(resultEvents.size()));
                 } else if (settingsScreen != null) {
                     settingsScreen.onCalendarRefreshResult("Calendar refresh failed · " + resultError);
                 }
                 if (manual && resultError != null) {
-                    Toast.makeText(this, "Calendar refresh failed: " + resultError, Toast.LENGTH_LONG).show();
+                    TToast.makeText(this, "Calendar refresh failed: " + resultError, Toast.LENGTH_LONG).show();
                 }
                 scheduleCalendarRefresh();
             });
@@ -3089,9 +3134,9 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
         try {
             Intent browser = new Intent(Intent.ACTION_VIEW, target);
             if (browser.resolveActivity(getPackageManager()) != null) startActivity(browser);
-            else Toast.makeText(this, "No app can open this YouTube link.", Toast.LENGTH_LONG).show();
+            else TToast.makeText(this, "No app can open this YouTube link.", Toast.LENGTH_LONG).show();
         } catch (Exception e) {
-            Toast.makeText(this, "Could not open this YouTube link.", Toast.LENGTH_LONG).show();
+            TToast.makeText(this, "Could not open this YouTube link.", Toast.LENGTH_LONG).show();
         }
     }
 
@@ -3625,7 +3670,7 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
             lifecycleWork.post(() -> {
                 if (generation != backgroundFolderGeneration || isFinishing()) return;
                 if (!scan.success) {
-                    if (userSelected) Toast.makeText(this,
+                    if (userSelected) TToast.makeText(this,
                             "Could not read that folder. Keeping the saved slideshow.", Toast.LENGTH_LONG).show();
                     return;
                 }
@@ -3633,9 +3678,9 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
                 if (!sameBackgroundPhotos(scan.photos)) setBackgroundPhotos(scan.photos);
                 if (settingsScreen != null) settingsScreen.refreshAppearance();
                 if (userSelected && scan.photos.isEmpty()) {
-                    Toast.makeText(this, "No images were found in that folder.", Toast.LENGTH_LONG).show();
+                    TToast.makeText(this, "No images were found in that folder.", Toast.LENGTH_LONG).show();
                 } else if (userSelected) {
-                    Toast.makeText(this, "Background slideshow updated · " + scan.photos.size() + " photos", Toast.LENGTH_SHORT).show();
+                    TToast.makeText(this, "Background slideshow updated · " + scan.photos.size() + " photos", Toast.LENGTH_SHORT).show();
                 }
             });
         });
@@ -3661,7 +3706,7 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
             lifecycleWork.post(() -> {
                 if (generation != backgroundFolderGeneration || isFinishing()) return;
                 if (error != null || result.isEmpty()) {
-                    if (userSelected) Toast.makeText(this, error == null ? "No public photos were found in that album." : error, Toast.LENGTH_LONG).show();
+                    if (userSelected) TToast.makeText(this, error == null ? "No public photos were found in that album." : error, Toast.LENGTH_LONG).show();
                     return;
                 }
                 cacheBackgroundAlbum(shareUrl, result);
@@ -3669,7 +3714,7 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
                         .putLong("googlePhotosUpdatedAt", System.currentTimeMillis()).apply();
                 if (!sameBackgroundPhotos(result)) setBackgroundPhotos(result);
                 if (settingsScreen != null) settingsScreen.refreshAppearance();
-                if (userSelected) Toast.makeText(this, "Google Photos slideshow updated · " + result.size() + " photos", Toast.LENGTH_SHORT).show();
+                if (userSelected) TToast.makeText(this, "Google Photos slideshow updated · " + result.size() + " photos", Toast.LENGTH_SHORT).show();
                 scheduleGooglePhotosRefresh();
             });
         });
@@ -3972,7 +4017,7 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
         if (channel == null) return false;
         boolean added = FavoriteChannels.toggle(favoriteChannelKeys, channel);
         FavoriteChannels.save(preferences, favoriteChannelKeys);
-        Toast.makeText(this, (added ? "Added to" : "Removed from") + " favourites: " + channel.name, Toast.LENGTH_SHORT).show();
+        TToast.makeText(this, Lang.favouriteToast(added, channel.name), Toast.LENGTH_SHORT).show();
         renderChannels();
         return true;
     }
@@ -4200,7 +4245,7 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
                     rail.addView(groupLabel, glParams);
                     lastGroup = group;
                 }
-                Button tab = new Button(MainActivity.this);
+                Button tab = new TButton(MainActivity.this);
                 tab.setText(sections[target]);
                 tab.setCompoundDrawablesWithIntrinsicBounds(SettingsUi.icon(MainActivity.this, target), null, null, null);
                 tab.setCompoundDrawablePadding(dp(12));
@@ -4255,8 +4300,15 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
                 if (event.getAction() != KeyEvent.ACTION_DOWN || focused == null) return false;
                 if (!isDpadDirection(keyCode)) return false;
                 int direction = focusDirection(keyCode);
-                // The input keeps horizontal arrows for cursor movement and multiline navigation.
-                if (focused instanceof EditText) return false;
+                // 左右键始终留给光标；多行输入框的上下键也留给文本导航。
+                // 单行输入框的上下键必须能换焦点，否则焦点会卡在输入框里出不来。
+                if (focused instanceof EditText) {
+                    boolean multiline = (((EditText) focused).getInputType()
+                            & android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE) != 0;
+                    if (multiline || direction == View.FOCUS_LEFT || direction == View.FOCUS_RIGHT) {
+                        return false;
+                    }
+                }
                 if (rail != null && isWithinPage(focused, rail)) {
                     if (direction == View.FOCUS_UP && focused == tabs[NAV_ORDER[0]]) return true;
                     if (direction == View.FOCUS_RIGHT) {
@@ -4279,6 +4331,12 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
                     if (next != null && isWithinPage(next, detail)) {
                         if (next.isFocusable() && next.isEnabled() && next.requestFocus()) return true;
                         return true;
+                    }
+                    if (direction == View.FOCUS_DOWN || direction == View.FOCUS_UP) {
+                        View inside = geometricNextInPage(focused, detail, direction);
+                        if (inside != null && inside.requestFocus()) return true;
+                        // 面板里已经没有上一项了 → 回左侧导航（否则这次按键会被吞掉）
+                        if (direction == View.FOCUS_UP && tabs[section].requestFocus()) return true;
                     }
                     if (direction == View.FOCUS_LEFT && tabs[section].requestFocus()) return true;
                     if (direction == View.FOCUS_UP && !canScrollWithinPage(focused, detail, direction)) {
@@ -4469,10 +4527,10 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
             if (!hasUnsavedEdits()) { dialog.dismiss(); return; }
             AlertDialog prompt = new AlertDialog.Builder(new android.view.ContextThemeWrapper(MainActivity.this,
                     LiquidTheme.alertDialogTheme(MainActivity.this)))
-                    .setTitle("Discard unsaved edits?")
-                    .setMessage("Playlist, DRM, or calendar changes have not been saved.")
-                    .setPositiveButton("Discard", (ignored, which) -> dialog.dismiss())
-                    .setNegativeButton("Keep editing", null).create();
+                    .setTitle(Lang.t("Discard unsaved edits?"))
+                    .setMessage(Lang.t("Playlist, DRM, or calendar changes have not been saved."))
+                    .setPositiveButton(Lang.t("Discard"), (ignored, which) -> dialog.dismiss())
+                    .setNegativeButton(Lang.t("Keep editing"), null).create();
             Motion.dialog(prompt); prompt.show();
             styleDialog(prompt);
         }
@@ -4699,7 +4757,7 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
                 try {
                     startActivity(new Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS));
                 } catch (Exception e) {
-                    Toast.makeText(MainActivity.this, "Could not open Accessibility settings.", Toast.LENGTH_LONG).show();
+                    TToast.makeText(MainActivity.this, "Could not open Accessibility settings.", Toast.LENGTH_LONG).show();
                 }
             });
             addFormButton(form, "Try setting Sva as the Home app", v -> {
@@ -4707,7 +4765,7 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
                     startActivity(new Intent("android.settings.HOME_SETTINGS"));
                 } catch (Exception e) {
                     try { startActivity(new Intent(android.provider.Settings.ACTION_SETTINGS)); }
-                    catch (Exception ignored) { Toast.makeText(MainActivity.this, "Could not open Home settings.", Toast.LENGTH_LONG).show(); }
+                    catch (Exception ignored) { TToast.makeText(MainActivity.this, "Could not open Home settings.", Toast.LENGTH_LONG).show(); }
                 }
             });
         }
@@ -4868,9 +4926,9 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
                 title.setSingleLine(true);
                 title.setEllipsize(android.text.TextUtils.TruncateAt.END);
                 copy.addView(title);
-                TextView detail = label((YouTubeCard.VIDEO.equals(card.type) ? "VIDEO" : "PLAYLIST")
-                        + ((card.thumbnailUrl == null || card.thumbnailUrl.isEmpty()) ? "  ·  Add art" : "")
-                        + "  ·  " + card.url, 11, SettingsUi.muted(MainActivity.this), false);
+                TextView detail = label(Lang.youtubeRowDetail(YouTubeCard.VIDEO.equals(card.type),
+                        card.thumbnailUrl != null && !card.thumbnailUrl.isEmpty(), card.url),
+                        11, SettingsUi.muted(MainActivity.this), false);
                 detail.setSingleLine(true);
                 detail.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
                 copy.addView(detail);
@@ -4916,9 +4974,9 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
         }
 
         private void editYouTubeArtwork(YouTubeCard selected) {
-            EditText artworkInput = new EditText(MainActivity.this);
+            EditText artworkInput = new TEditText(MainActivity.this);
             artworkInput.setSingleLine(true);
-            artworkInput.setHint("YouTube video link");
+            artworkInput.setHint(Lang.t("YouTube video link"));
             artworkInput.setTextColor(SettingsUi.text(MainActivity.this));
             artworkInput.setHintTextColor(SettingsUi.muted(MainActivity.this));
             artworkInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
@@ -4927,11 +4985,11 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
                     LiquidTheme.border(MainActivity.this), 1, 12));
             AlertDialog artworkDialog = new AlertDialog.Builder(new android.view.ContextThemeWrapper(MainActivity.this,
                     LiquidTheme.alertDialogTheme(MainActivity.this)))
-                    .setTitle("Card artwork")
-                    .setMessage("Paste a YouTube video link to use its thumbnail. Leave empty to retry automatic artwork.")
+                    .setTitle(Lang.t("Card artwork"))
+                    .setMessage(Lang.t("Paste a YouTube video link to use its thumbnail. Leave empty to retry automatic artwork."))
                     .setView(artworkInput)
-                    .setNegativeButton("Cancel", null)
-                    .setPositiveButton("Save", null)
+                    .setNegativeButton(Lang.t("Cancel"), null)
+                    .setPositiveButton(Lang.t("Save"), null)
                     .create();
             artworkDialog.setOnShowListener(ignored -> artworkDialog.getButton(AlertDialog.BUTTON_POSITIVE)
                     .setOnClickListener(view -> {
@@ -4963,9 +5021,9 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
         }
 
         private void editYouTubeTitle(YouTubeCard selected) {
-            EditText titleInput = new EditText(MainActivity.this);
+            EditText titleInput = new TEditText(MainActivity.this);
             titleInput.setSingleLine(true);
-            titleInput.setHint("Use the YouTube title");
+            titleInput.setHint(Lang.t("Use the YouTube title"));
             titleInput.setText(selected.customTitle ? selected.title : "");
             titleInput.setTextColor(SettingsUi.text(MainActivity.this));
             titleInput.setHintTextColor(SettingsUi.muted(MainActivity.this));
@@ -4978,11 +5036,11 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
                     LiquidTheme.border(MainActivity.this), 1, 12));
             AlertDialog prompt = new AlertDialog.Builder(new android.view.ContextThemeWrapper(MainActivity.this,
                     LiquidTheme.alertDialogTheme(MainActivity.this)))
-                    .setTitle("Card title")
-                    .setMessage("Clear the title to use the title provided by YouTube when available.")
+                    .setTitle(Lang.t("Card title"))
+                    .setMessage(Lang.t("Clear the title to use the title provided by YouTube when available."))
                     .setView(titleInput)
-                    .setNegativeButton("Cancel", null)
-                    .setPositiveButton("Save", (dialog, which) -> {
+                    .setNegativeButton(Lang.t("Cancel"), null)
+                    .setPositiveButton(Lang.t("Save"), (dialog, which) -> {
                         String custom = titleInput.getText().toString().trim();
                         List<YouTubeCard> latest = savedYouTubeCards();
                         for (YouTubeCard card : latest) {
@@ -5066,10 +5124,8 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
             JSONArray events;
             try { events = new JSONArray(preferences.getString("publicCalendarEvents", "[]")); }
             catch (Exception ignored) { events = new JSONArray(); }
-            String updated = updatedAt == 0L ? "Not refreshed yet"
-                    : "Updated " + DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
-                    .format(new Date(updatedAt));
-            return "Public calendar cache · " + events.length() + " events · " + updated;
+            String updated = Lang.stamp(updatedAt, false);
+            return Lang.calendarCache(events.length(), updated);
         }
 
         void onCalendarRefreshResult(String message) {
@@ -5107,9 +5163,9 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
             LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(-1, -2);
             labelParams.setMargins(dp(10), dp(10), dp(10), 0);
             form.addView(title, labelParams);
-            EditText field = new EditText(MainActivity.this);
+            EditText field = new TEditText(MainActivity.this);
             field.setText(value);
-            field.setHint(hintText);
+            field.setHint(Lang.t(hintText));
             field.setTextColor(SettingsUi.text(MainActivity.this));
             field.setHintTextColor(SettingsUi.muted(MainActivity.this));
             field.setTextSize(14);
@@ -5286,7 +5342,7 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
                 iptv.saveDrmSettings(draftLicense, draftHeaders);
                 draftLicense = iptv.drmLicenseUrl(); draftHeaders = iptv.drmHeaderText();
                 renderSection();
-                Toast.makeText(MainActivity.this, "Playback settings saved", Toast.LENGTH_SHORT).show();
+                TToast.makeText(MainActivity.this, "Playback settings saved", Toast.LENGTH_SHORT).show();
             }, v -> {
                 draftLicense = iptv.drmLicenseUrl(); draftHeaders = iptv.drmHeaderText(); renderSection();
             }, null);
@@ -5306,6 +5362,17 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
 
         private void renderAppearance(LinearLayout page) {
             LinearLayout form = scrollForm(page);
+            // — Language ————————————————————————————————————————————————————————
+            addFormSectionHeader(form, "Language");
+            addFormHint(form, "Interface language. Switching takes effect immediately.");
+            addChoice(form, "Language", new String[]{"English", "中文"}, Lang.isChinese() ? 1 : 0, index -> {
+                boolean zh = index == 1;
+                if (zh == Lang.isChinese()) return;
+                Lang.setChinese(MainActivity.this, zh);
+                // 整页重建：首页、底栏、设置弹窗一起换语言。onCreate 会按
+                // restoreSettings 状态把设置页恢复到同一分区，草稿不丢。
+                recreate();
+            });
             // — Theme ——————————————————————————————————————————————————————————
             addFormSectionHeader(form, "Theme");
             addFormHint(form, "Follow your TV’s theme, or choose a light or dark appearance.");
@@ -5349,10 +5416,10 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
             addFormButton(form, "Use Google Photos album", v -> {
                 String link = albumField.getText().toString().trim();
                 if (link.isEmpty()) {
-                    Toast.makeText(MainActivity.this, "Paste a Google Photos shared album link first.", Toast.LENGTH_SHORT).show();
+                    TToast.makeText(MainActivity.this, "Paste a Google Photos shared album link first.", Toast.LENGTH_SHORT).show();
                     return;
                 }
-                Toast.makeText(MainActivity.this, "Loading public album…", Toast.LENGTH_SHORT).show();
+                TToast.makeText(MainActivity.this, "Loading public album…", Toast.LENGTH_SHORT).show();
                 loadBackgroundAlbum(link, true);
             });
             if (!albumUrl.isEmpty()) addFormButton(form, "Clear Google Photos album", v -> {
@@ -5399,20 +5466,11 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
         }
 
         private String cacheSummaryText() {
-            long updatedAt = iptv.lastUpdatedAt();
-            String updated = updatedAt == 0 ? "Not refreshed yet"
-                    : "Updated " + DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
-                    .format(new Date(updatedAt));
-            return "On-device channel cache · " + channels.size()
-                    + (channels.size() == 1 ? " channel" : " channels") + " · " + updated;
+            return Lang.channelCache(channels.size(), iptv.lastUpdatedAt());
         }
 
         private String guideSummaryText() {
-            long updatedAt = iptv.lastGuideUpdatedAt();
-            String updated = updatedAt == 0 ? "Not refreshed yet"
-                    : "Last refreshed " + DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
-                    .format(new Date(updatedAt));
-            return "Programme guide · daily refresh · " + updated;
+            return Lang.guideSummary(iptv.lastGuideUpdatedAt());
         }
 
         private void renderChannelSettings(LinearLayout page) {
@@ -5506,8 +5564,8 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
             }
 
             private void updateCountLabel() {
-                count.setText(visible.size() + " of " + channels.size() + " channels · "
-                        + shownChannelCount() + " shown · " + favoriteChannelCount() + " favourites\nPress OK to toggle visibility · Long-press to toggle favourite");
+                count.setText(Lang.channelsCount(visible.size(), channels.size(),
+                        shownChannelCount(), favoriteChannelCount()));
             }
 
             @Override public Holder onCreateViewHolder(ViewGroup parent, int viewType) {
@@ -5559,7 +5617,7 @@ private void updateCalendarDetails(List<PublicCalendarRepository.Event> events) 
                     int current = holder.getBindingAdapterPosition();
                     if (current != RecyclerView.NO_POSITION) notifyItemChanged(current);
                     updateCountLabel();
-                    Toast.makeText(MainActivity.this, (added ? "Added to" : "Removed from") + " favourites: " + channel.name, Toast.LENGTH_SHORT).show();
+                    TToast.makeText(MainActivity.this, Lang.favouriteToast(added, channel.name), Toast.LENGTH_SHORT).show();
                     return true;
                 });
             }
