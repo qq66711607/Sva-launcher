@@ -201,10 +201,10 @@ public final class GameLibraryActivity extends MotionActivity {
         final List<Uri> files = request == PICK_FILES ? GameRepository.urisFromResult(data) : null;
         final Uri tree = request == PICK_FOLDER ? data.getData() : null;
         if (files != null && files.isEmpty() || request == PICK_FOLDER && tree == null) return;
-        Toast.makeText(this, "Importing games…", Toast.LENGTH_SHORT).show();
+        TToast.makeText(this, "Importing games…", Toast.LENGTH_SHORT).show();
         new Thread(() -> {
             GameRepository.ImportResult imported = files != null ? repository.importUris(files) : repository.importTree(tree);
-            runOnUiThread(() -> { if (isFinishing() || isDestroyed()) return; Toast.makeText(this, imported.message(), Toast.LENGTH_LONG).show(); render(); });
+            runOnUiThread(() -> { if (isFinishing() || isDestroyed()) return; TToast.makeText(this, imported.message(), Toast.LENGTH_LONG).show(); render(); });
         }, "nes-import").start();
     }
 }

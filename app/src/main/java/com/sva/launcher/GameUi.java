@@ -39,14 +39,14 @@ final class GameUi {
     }
 
     static TextView text(Activity activity, String value, float size, boolean bold) {
-        TextView text = new TextView(activity);
+        TextView text = new TTextView(activity);
         text.setText(value); text.setTextColor(LiquidTheme.text(activity)); text.setTextSize(size);
         text.setTypeface(LiquidTheme.font(activity));
         return text;
     }
 
     static Button button(Activity activity, String value) {
-        Button button = new Button(activity);
+        Button button = new TButton(activity);
         button.setTypeface(LiquidTheme.font(activity));
         button.setText(value); button.setTextColor(LiquidTheme.text(activity)); button.setTextSize(15);
         button.setAllCaps(false); button.setFocusable(true); button.setFocusableInTouchMode(false);

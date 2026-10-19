@@ -131,15 +131,15 @@ final class WeatherRepository {
     }
 
     static String condition(int code) {
-        if (code == 0) return "Clear";
-        if (code <= 2) return "Partly cloudy";
-        if (code == 3) return "Overcast";
-        if (code == 45 || code == 48) return "Fog";
-        if (code >= 51 && code <= 57) return "Drizzle";
-        if ((code >= 61 && code <= 67) || code == 80 || code == 81 || code == 82) return "Rain";
-        if ((code >= 71 && code <= 77) || code == 85 || code == 86) return "Snow";
-        if (code >= 95) return "Thunderstorm";
-        return "Mixed weather";
+        if (code == 0) return Lang.weather("Clear");
+        if (code <= 2) return Lang.weather("Partly cloudy");
+        if (code == 3) return Lang.weather("Overcast");
+        if (code == 45 || code == 48) return Lang.weather("Fog");
+        if (code >= 51 && code <= 57) return Lang.weather("Drizzle");
+        if ((code >= 61 && code <= 67) || code == 80 || code == 81 || code == 82) return Lang.weather("Rain");
+        if ((code >= 71 && code <= 77) || code == 85 || code == 86) return Lang.weather("Snow");
+        if (code >= 95) return Lang.weather("Thunderstorm");
+        return Lang.weather("Mixed weather");
     }
 
     static String symbol(int code, boolean day) {

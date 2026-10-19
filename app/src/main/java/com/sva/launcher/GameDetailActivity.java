@@ -152,11 +152,11 @@ public final class GameDetailActivity extends MotionActivity {
     }
 
     private void rename() {
-        EditText input = new EditText(this); input.setText(game.title); input.setSelectAllOnFocus(true);
-        AlertDialog dialog = new AlertDialog.Builder(this, LiquidTheme.alertDialogTheme(this)).setTitle("Game title").setView(input).setPositiveButton("Save", (d, w) -> {
+        EditText input = new TEditText(this); input.setText(game.title); input.setSelectAllOnFocus(true);
+        AlertDialog dialog = new AlertDialog.Builder(this, LiquidTheme.alertDialogTheme(this)).setTitle(Lang.t("Game title")).setView(input).setPositiveButton(Lang.t("Save"), (d, w) -> {
             String value = input.getText().toString().trim(); if (value.isEmpty()) return;
-            try { repository.updateTitle(id, value); render(); } catch (Exception e) { Toast.makeText(this, "Could not save title.", Toast.LENGTH_LONG).show(); }
-        }).setNegativeButton("Cancel", null).create();
+            try { repository.updateTitle(id, value); render(); } catch (Exception e) { TToast.makeText(this, "Could not save title.", Toast.LENGTH_LONG).show(); }
+        }).setNegativeButton(Lang.t("Cancel"), null).create();
         Motion.dialog(dialog); dialog.show();
     }
 
@@ -168,14 +168,14 @@ public final class GameDetailActivity extends MotionActivity {
         super.onActivityResult(request, result, data);
         if (request != PICK_ART || result != RESULT_OK || data == null || data.getData() == null) return;
         try { repository.updateArtwork(id, data.getData()); render(); }
-        catch (Exception e) { Toast.makeText(this, "Could not save artwork.", Toast.LENGTH_LONG).show(); }
+        catch (Exception e) { TToast.makeText(this, "Could not save artwork.", Toast.LENGTH_LONG).show(); }
     }
 
     private void remove() {
-        AlertDialog dialog = new AlertDialog.Builder(this, LiquidTheme.alertDialogTheme(this)).setTitle("Remove " + game.title + "?")
-                .setMessage("Sva's imported copy, artwork, and battery save will be deleted. Your original file will not be changed.")
-                .setPositiveButton("Remove", (d, w) -> { try { repository.remove(id); finish(); } catch (Exception e) { Toast.makeText(this, "Could not remove game.", Toast.LENGTH_LONG).show(); } })
-                .setNegativeButton("Cancel", null).create();
+        AlertDialog dialog = new AlertDialog.Builder(this, LiquidTheme.alertDialogTheme(this)).setTitle(Lang.t("Remove " + game.title + "?"))
+                .setMessage(Lang.t("Sva's imported copy, artwork, and battery save will be deleted. Your original file will not be changed."))
+                .setPositiveButton(Lang.t("Remove"), (d, w) -> { try { repository.remove(id); finish(); } catch (Exception e) { TToast.makeText(this, "Could not remove game.", Toast.LENGTH_LONG).show(); } })
+                .setNegativeButton(Lang.t("Cancel"), null).create();
         Motion.dialog(dialog); dialog.show();
     }
 }

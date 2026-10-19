@@ -49,7 +49,7 @@ final class SettingsUi {
         return d;
     }
     static TextView text(Context c, String value, int size, boolean secondary) {
-        TextView t = new TextView(c); t.setText(value); t.setTextSize(size);
+        TextView t = new TTextView(c); t.setText(value); t.setTextSize(size);
         t.setTypeface(LiquidTheme.font(c)); t.setTextColor(secondary ? muted(c) : text(c));
         return t;
     }
@@ -64,7 +64,7 @@ final class SettingsUi {
         b.setElevation(0); Motion.interaction(b, true);
     }
     static Button action(Context c, String label, Runnable click) {
-        Button b = new Button(c); styleButton(b); b.setText(label);
+        Button b = new TButton(c); styleButton(b); b.setText(label);
         if (click != null) b.setOnClickListener(v -> click.run());
         if (label.startsWith("Remove") || label.startsWith("Clear") || label.startsWith("Discard"))
             b.setTextColor(LiquidTheme.isLight(c) ? 0xFFAA2635 : 0xFFFFA8AB);
@@ -95,7 +95,7 @@ final class SettingsUi {
     static View toggle(Context c, String title, boolean checked, java.util.function.Consumer<Boolean> save) {
         LinearLayout row = row(c); TextView label = text(c, title, 16, false);
         row.addView(label, new LinearLayout.LayoutParams(0, -2, 1));
-        Switch toggle = new Switch(c); toggle.setChecked(checked);
+        Switch toggle = new TSwitch(c); toggle.setChecked(checked);
         toggle.setFocusable(false); toggle.setClickable(false); toggle.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         toggle.setThumbTintList(new android.content.res.ColorStateList(
                 new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}},
@@ -117,21 +117,23 @@ final class SettingsUi {
         });
         return row;
     }
-    static View choice(Context c, String title, String[] options, int selected, IntConsumer save) {
+    static View choice(Context c, String title, String[] rawOptions, int selected, IntConsumer save) {
+        // 选项整表翻译：控件文本已被 Lang 翻译，这里保持同一份值，否则下面的 contentEquals 比对会失配
+        final String[] options = Lang.all(rawOptions);
         LinearLayout row = row(c); TextView label = text(c, title, 16, false);
         row.addView(label, new LinearLayout.LayoutParams(0, -2, 1));
         TextView value = text(c, options[selected], 14, true);
         value.setGravity(Gravity.END); value.setMaxLines(2);
         row.addView(value, new LinearLayout.LayoutParams(dp(c, 160), -2));
-        row.setContentDescription(title + ", " + options[selected]);
+        row.setContentDescription(Lang.t(title) + ", " + options[selected]);
         row.setOnClickListener(v -> {
             int current = 0;
             for (int i = 0; i < options.length; i++) if (options[i].contentEquals(value.getText())) current = i;
             AlertDialog dialog = new AlertDialog.Builder(c, LiquidTheme.alertDialogTheme(c))
-                    .setTitle(title).setSingleChoiceItems(options, current, (d, which) -> {
-                        value.setText(options[which]); row.setContentDescription(title + ", " + options[which]);
+                    .setTitle(Lang.t(title)).setSingleChoiceItems(options, current, (d, which) -> {
+                        value.setText(options[which]); row.setContentDescription(Lang.t(title) + ", " + options[which]);
                         save.accept(which); d.dismiss(); row.requestFocus();
-                    }).setNegativeButton("Cancel", null).create();
+                    }).setNegativeButton(Lang.t("Cancel"), null).create();
             dialog.setOnDismissListener(d -> row.requestFocus()); Motion.dialog(dialog); dialog.show();
             dialog.getListView().setSelection(current);
         });

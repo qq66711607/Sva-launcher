@@ -260,10 +260,10 @@ public final class GuideActivity extends MotionActivity {
         }
         int checked = category == null ? 0 : categories.indexOf(category) + 1;
         AlertDialog dialog = new AlertDialog.Builder(new ContextThemeWrapper(this, LiquidTheme.alertDialogTheme(this)))
-                .setTitle("Channel category").setSingleChoiceItems(labels.toArray(new String[0]), checked, (d, which) -> {
+                .setTitle(Lang.t("Channel category")).setSingleChoiceItems(labels.toArray(new String[0]), checked, (d, which) -> {
                     category = which == 0 ? null : categories.get(which - 1); selectedKey = null;
                     channelFocused = false; d.dismiss(); filter(true); Motion.reveal(list);
-                }).setNegativeButton("Cancel", null).create();
+                }).setNegativeButton(Lang.t("Cancel"), null).create();
         showDialog(dialog);
     }
 
@@ -487,13 +487,14 @@ public final class GuideActivity extends MotionActivity {
         if (p == null || p.startMs <= System.currentTimeMillis()) { PlaybackLauncher.watch(this, channel, all); return; }
         boolean saved = reminded(channel, p);
         AlertDialog dialog = new AlertDialog.Builder(new ContextThemeWrapper(this, LiquidTheme.alertDialogTheme(this)))
-                .setTitle(p.title).setMessage(channel.name + "\n" + range(p) + "\n\nReminders appear five minutes before the show while Sva is open.")
-                .setPositiveButton(saved ? "Remove reminder" : "Remind me", (d, which) -> {
+                .setTitle(p.title).setMessage(channel.name + "\n" + range(p) + "\n\n"
+                        + Lang.t("Reminders appear five minutes before the show while Sva is open."))
+                .setPositiveButton(Lang.t(saved ? "Remove reminder" : "Remind me"), (d, which) -> {
                     if (saved) reminders.remove(reminder(channel, p));
-                    else if (!reminders.add(reminder(channel, p))) Toast.makeText(this, "This programme has already started.", Toast.LENGTH_SHORT).show();
+                    else if (!reminders.add(reminder(channel, p))) TToast.makeText(this, "This programme has already started.", Toast.LENGTH_SHORT).show();
                     updateDetails(); refreshBadges();
-                }).setNeutralButton("Watch channel", (d, which) -> PlaybackLauncher.watch(this, channel, all))
-                .setNegativeButton("Cancel", null).create();
+                }).setNeutralButton(Lang.t("Watch channel"), (d, which) -> PlaybackLauncher.watch(this, channel, all))
+                .setNegativeButton(Lang.t("Cancel"), null).create();
         showDialog(dialog);
     }
     private void showDialog(AlertDialog dialog) {
@@ -591,7 +592,7 @@ public final class GuideActivity extends MotionActivity {
                 IptvRepository.Channel c = channels.get(target.row);
                 boolean added = FavoriteChannels.toggle(favoriteKeys, c);
                 FavoriteChannels.save(getSharedPreferences("launcher", 0), favoriteKeys);
-                Toast.makeText(GuideActivity.this, (added ? "Added to" : "Removed from") + " favourites: " + c.name, Toast.LENGTH_SHORT).show();
+                TToast.makeText(GuideActivity.this, Lang.favouriteToast(added, c.name), Toast.LENGTH_SHORT).show();
                 updateFavoriteCategoryList();
                 adapter.notifyItemChanged(target.row);
                 if (FavoriteChannels.CATEGORY_FAVORITES.equals(category)) {
@@ -606,7 +607,7 @@ public final class GuideActivity extends MotionActivity {
         IptvRepository.Programme p = target.slot.programme;
         if (p == null) {
             String label = tile.getMeasuredWidth() > 0 && tile.getMeasuredWidth() < dp(70) ? "" : "No schedule";
-            if (!label.contentEquals(tile.getText())) tile.setText(label);
+            if (!Lang.t(label).toString().contentEquals(tile.getText())) tile.setText(label);
             tile.setTextColor(LiquidTheme.secondaryText(this));
             tile.setContentDescription("Schedule unavailable on " + channels.get(target.row).name + ". Press OK to watch.");
         } else {
@@ -615,7 +616,7 @@ public final class GuideActivity extends MotionActivity {
             String status = live ? "● LIVE" : reminded(channels.get(target.row), p) ? "◷ REMINDER" : time(p.startMs);
             int width = tile.getMeasuredWidth();
             String label = width > 0 && width < dp(48) ? "" : width > 0 && width < dp(100) ? p.title : status + "\n" + p.title;
-            if (!label.contentEquals(tile.getText())) tile.setText(label);
+            if (!Lang.t(label).toString().contentEquals(tile.getText())) tile.setText(label);
             tile.setContentDescription(p.title + " on " + channels.get(target.row).name + ", " + range(p)
                     + (live ? ", live now. Press OK to watch." : ". Press OK for reminders."));
         }
@@ -686,12 +687,12 @@ public final class GuideActivity extends MotionActivity {
         }
     }
     private Button button(String label, String description) {
-        Button button = new Button(this); button.setAllCaps(false); button.setText(label); button.setTextSize(13);
+        Button button = new TButton(this); button.setAllCaps(false); button.setText(label); button.setTextSize(13);
         button.setTypeface(LiquidTheme.font(this)); button.setTextColor(LiquidTheme.text(this)); button.setSingleLine(true);
         button.setEllipsize(TextUtils.TruncateAt.END); button.setPadding(dp(10), 0, dp(10), 0); style(button); button.setContentDescription(description); return button;
     }
     private TextView text(String value, int size, int color) {
-        TextView text = new TextView(this); text.setText(value); text.setTextSize(size); text.setTextColor(color);
+        TextView text = new TTextView(this); text.setText(value); text.setTextSize(size); text.setTextColor(color);
         text.setTypeface(LiquidTheme.font(this)); text.setEllipsize(TextUtils.TruncateAt.END); return text;
     }
     private void style(View view) {
@@ -706,7 +707,7 @@ public final class GuideActivity extends MotionActivity {
         GradientDrawable drawable = new GradientDrawable(); drawable.setColor(color); drawable.setCornerRadius(dp(radius));
         if (width > 0) drawable.setStroke(dp(width), stroke); return drawable;
     }
-    private String date(long timestamp, String pattern) { return new SimpleDateFormat(pattern, Locale.getDefault()).format(new Date(timestamp)); }
+    private String date(long timestamp, String pattern) { return new SimpleDateFormat(Lang.pattern(pattern), Lang.locale()).format(new Date(timestamp)); }
     private String time(long timestamp) { return date(timestamp, getSharedPreferences("launcher", 0).getBoolean("24h", false) ? "HH:mm" : "h:mm a"); }
     private int dp(int value) { return LiquidTheme.dp(this, value); }
 }

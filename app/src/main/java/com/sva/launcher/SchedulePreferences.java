@@ -53,8 +53,15 @@ final class SchedulePreferences {
     }
 
     static String label(long value, boolean slideshow, boolean supportsEveryLaunch) {
-        if (value == MANUAL) return slideshow ? "Paused" : "Manual only";
-        if (supportsEveryLaunch && value == EVERY_LAUNCH) return "Every launch";
+        if (value == MANUAL) return Lang.t(slideshow ? "Paused" : "Manual only").toString();
+        if (supportsEveryLaunch && value == EVERY_LAUNCH) return Lang.t("Every launch").toString();
+        // 英文有单复数，中文没有 —— 分开写，别指望 SUFFIX 规则去拼（" day" 会误伤 Today / All day）
+        if (Lang.isChinese()) {
+            if (value < MINUTE) return value / SECOND + " 秒";
+            if (value < HOUR) return value / MINUTE + " 分钟";
+            if (value < DAY) return value / HOUR + " 小时";
+            return value / DAY + " 天";
+        }
         if (value < MINUTE) return value / SECOND + " seconds";
         if (value < HOUR) return value / MINUTE + (value == MINUTE ? " minute" : " minutes");
         if (value < DAY) return value / HOUR + (value == HOUR ? " hour" : " hours");

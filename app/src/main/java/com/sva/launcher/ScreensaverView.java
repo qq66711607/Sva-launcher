@@ -95,7 +95,8 @@ final class ScreensaverView extends View {
                 artScene = makeScene();
                 changedAt = SystemClock.uptimeMillis();
                 status = hasSavedPhoto ? "" : album.isEmpty()
-                        ? "Add a Google Photos album in Screensaver settings" : "Loading your photographs…";
+                        ? Lang.t("Add a Google Photos album in Screensaver settings").toString()
+                        : Lang.t("Loading your photographs…").toString();
                 if (hasSavedPhoto) frame = 1;
                 if (!cached.isEmpty()) {
                     setUrls(cached);
@@ -112,7 +113,7 @@ final class ScreensaverView extends View {
                 });
             } catch (Exception ignored) {
                 main.post(() -> {
-                    if (!stopped) status = frame > 0 ? "" : "Album unavailable · showing landscape wallpaper";
+                    if (!stopped) status = frame > 0 ? "" : Lang.t("Album unavailable · showing landscape wallpaper").toString();
                 });
             }
         });
@@ -169,7 +170,7 @@ final class ScreensaverView extends View {
                 if (loaded != null) switchTo(key, loaded);
                 else {
                     index = (index + candidates.size()) % urls.size();
-                    if (frame == 0) status = "Photos unavailable · showing landscape wallpaper";
+                    if (frame == 0) status = Lang.t("Photos unavailable · showing landscape wallpaper").toString();
                     scheduleNext();
                 }
             });
@@ -265,8 +266,8 @@ final class ScreensaverView extends View {
         if (minute != clockMinute) {
             clockMinute = minute;
             clockLabel = new SimpleDateFormat(android.text.format.DateFormat.is24HourFormat(getContext())
-                    ? "HH:mm" : "h:mm a", Locale.getDefault()).format(new Date(now));
-            dateLabel = new SimpleDateFormat("EEE, d MMM", Locale.getDefault()).format(new Date(now));
+                    ? "HH:mm" : "h:mm a", Lang.locale()).format(new Date(now));
+            dateLabel = new SimpleDateFormat(Lang.pattern("EEE, d MMM"), Lang.locale()).format(new Date(now));
             updateInformation(now);
         }
         float drift = (float) Math.sin(time / 35) * w * .008f;
@@ -308,8 +309,8 @@ final class ScreensaverView extends View {
     }
 
     private void updateInformation(long now) {
-        weatherLabel = "Weather unavailable";
-        weatherDetail = "Set up weather in Launcher Settings";
+        weatherLabel = Lang.t("Weather unavailable").toString();
+        weatherDetail = Lang.t("Set up weather in Launcher Settings").toString();
         try {
             WeatherRepository.Forecast forecast = WeatherRepository.Forecast.fromJson(
                     new org.json.JSONObject(prefs.getString("weatherCache", "")));
@@ -321,8 +322,8 @@ final class ScreensaverView extends View {
                 weatherDetail = forecast.location;
             }
         } catch (Exception ignored) { }
-        eventLabel = "No upcoming events";
-        eventDetail = "Your calendar";
+        eventLabel = Lang.t("No upcoming events").toString();
+        eventDetail = Lang.t("Your calendar").toString();
         try {
             org.json.JSONArray events = new org.json.JSONArray(prefs.getString("publicCalendarEvents", "[]"));
             org.json.JSONObject nextEvent = null;
@@ -334,11 +335,11 @@ final class ScreensaverView extends View {
                 if (start < earliest) { earliest = start; nextEvent = event; }
             }
             if (nextEvent != null) {
-                eventLabel = nextEvent.optString("title", "Calendar event").replaceAll("\\s+", " ");
+                eventLabel = nextEvent.optString("title", Lang.t("Calendar event").toString()).replaceAll("\\s+", " ");
                 boolean allDay = nextEvent.optBoolean("allDay", false);
-                eventDetail = (earliest <= now ? "Now · " : "Up next · ")
-                        + new SimpleDateFormat(allDay ? "EEE, d MMM" : "EEE · h:mm a", Locale.getDefault())
-                        .format(new Date(earliest)) + (allDay ? " · All day" : "");
+                eventDetail = Lang.t((earliest <= now ? "Now · " : "Up next · ")
+                        + new SimpleDateFormat(Lang.pattern(allDay ? "EEE, d MMM" : "EEE · h:mm a"), Lang.locale())
+                        .format(new Date(earliest)) + (allDay ? " · All day" : "")).toString();
             }
         } catch (Exception ignored) { }
     }

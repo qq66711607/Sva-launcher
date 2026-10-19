@@ -152,7 +152,7 @@ final class ChannelAdapter extends RecyclerView.Adapter<ChannelAdapter.Holder> {
         logoParams.setMargins(0, 0, 0, dp(9, density));
         tile.addView(logoBox, logoParams);
 
-        TextView fallback = new TextView(activity);
+        TextView fallback = new TTextView(activity);
         fallback.setGravity(Gravity.CENTER);
         fallback.setTextColor(LiquidTheme.text(activity));
         fallback.setTextSize(27);
@@ -165,7 +165,7 @@ final class ChannelAdapter extends RecyclerView.Adapter<ChannelAdapter.Holder> {
         imageParams.setMargins(dp(4, density), dp(4, density), dp(4, density), dp(4, density));
         logoBox.addView(image, imageParams);
 
-        TextView favBadge = new TextView(activity);
+        TextView favBadge = new TTextView(activity);
         favBadge.setText("★");
         favBadge.setTextSize(14);
         favBadge.setTextColor(0xFFFFC107);
@@ -178,7 +178,7 @@ final class ChannelAdapter extends RecyclerView.Adapter<ChannelAdapter.Holder> {
         text.setOrientation(LinearLayout.VERTICAL);
         text.setGravity(Gravity.CENTER_HORIZONTAL | Gravity.CENTER_VERTICAL);
         tile.addView(text, new LinearLayout.LayoutParams(-1, 0, 1));
-        TextView name = new TextView(activity);
+        TextView name = new TTextView(activity);
         name.setTextColor(LiquidTheme.text(activity));
         name.setTextSize(16);
         name.setTypeface(LiquidTheme.font(activity));
@@ -186,7 +186,7 @@ final class ChannelAdapter extends RecyclerView.Adapter<ChannelAdapter.Holder> {
         name.setMaxLines(2);
         name.setEllipsize(android.text.TextUtils.TruncateAt.END);
         text.addView(name);
-        TextView now = new TextView(activity);
+        TextView now = new TTextView(activity);
         now.setTextColor(LiquidTheme.text(activity));
         now.setTextSize(12);
         now.setGravity(Gravity.CENTER);
@@ -194,7 +194,7 @@ final class ChannelAdapter extends RecyclerView.Adapter<ChannelAdapter.Holder> {
         now.setEllipsize(android.text.TextUtils.TruncateAt.END);
         now.setPadding(0, dp(3, density), 0, 0);
         text.addView(now);
-        TextView next = new TextView(activity);
+        TextView next = new TTextView(activity);
         next.setTextColor(LiquidTheme.secondaryText(activity));
         next.setTextSize(11);
         next.setGravity(Gravity.CENTER);

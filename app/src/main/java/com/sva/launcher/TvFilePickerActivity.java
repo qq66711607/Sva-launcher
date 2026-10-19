@@ -137,11 +137,11 @@ public final class TvFilePickerActivity extends MotionActivity {
         browser.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         page.addView(browser, new LinearLayout.LayoutParams(-1, 0, 1));
         if (isSaveMode()) {
-            filename = new EditText(this);
+            filename = new TEditText(this);
             filename.setSingleLine(true);
             filename.setText("sva-launcher-backup.json");
             filename.setSelectAllOnFocus(true);
-            filename.setHint("Backup filename");
+            filename.setHint(Lang.t("Backup filename"));
             filename.setContentDescription("Backup filename");
             SettingsUi.styleInput(filename, false);
             LinearLayout.LayoutParams inputParams = new LinearLayout.LayoutParams(-1, dp(56));
@@ -182,7 +182,7 @@ public final class TvFilePickerActivity extends MotionActivity {
     }
 
     private void updateAction() {
-        action.setText(isMultiMode() ? "Add selected (" + selected.size() + ")"
+        action.setText(isMultiMode() ? Lang.selectedCount(selected.size())
                 : isFolderMode() ? "Use this folder" : isSaveMode() ? "Save here" : "Select a file");
         boolean enabled = hasAccess() && (isMultiMode() ? !selected.isEmpty()
                 : directory != null && (isFolderMode() || isSaveMode()));
@@ -214,7 +214,7 @@ public final class TvFilePickerActivity extends MotionActivity {
                         Uri.parse("package:" + getPackageName())), STORAGE_SETTINGS);
             } catch (Exception e) {
                 try { startActivityForResult(new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION), STORAGE_SETTINGS); }
-                catch (Exception ignored) { Toast.makeText(this, "Storage settings are unavailable.", Toast.LENGTH_LONG).show(); }
+                catch (Exception ignored) { TToast.makeText(this, "Storage settings are unavailable.", Toast.LENGTH_LONG).show(); }
             }
         } else {
             requestPermissions(isSaveMode()
@@ -274,7 +274,7 @@ public final class TvFilePickerActivity extends MotionActivity {
         }
         path.setText(directory.getAbsolutePath());
         path.setContentDescription("Current folder: " + directory.getAbsolutePath());
-        instruction.setText(isMultiMode() ? selected.size() + " selected · press OK on files, then Add selected"
+        instruction.setText(isMultiMode() ? Lang.selectedHint(selected.size())
                 : isFolderMode() ? "Open a folder, then choose Use this folder" : isSaveMode()
                 ? "Enter a filename and save in this folder" : "Select a file with OK");
         File[] children = directory.listFiles();
@@ -373,7 +373,7 @@ public final class TvFilePickerActivity extends MotionActivity {
                 View row = rows.getChildAt(i);
                 if (row instanceof Button && file.equals(row.getTag())) styleFileRow((Button) row, file, false);
             }
-            instruction.setText(selected.size() + " selected · press OK on files, then Add selected");
+            instruction.setText(Lang.selectedHint(selected.size()));
             updateAction();
         } else finishWithFiles(Arrays.asList(file));
     }
@@ -386,21 +386,21 @@ public final class TvFilePickerActivity extends MotionActivity {
         } else if (isSaveMode() && directory != null) {
             String name = filename.getText().toString().trim();
             if (name.isEmpty() || name.equals(".") || name.equals("..") || name.contains("/") || name.contains("\\")) {
-                filename.setError("Enter a filename without slashes"); return;
+                filename.setError(Lang.t("Enter a filename without slashes")); return;
             }
             if (!name.toLowerCase(Locale.ROOT).endsWith(".json")) name += ".json";
             File target = new File(directory, name);
             if (target.exists()) {
                 AlertDialog prompt = new AlertDialog.Builder(this, LiquidTheme.alertDialogTheme(this))
-                        .setTitle("Replace " + name + "?")
-                        .setPositiveButton("Replace", (dialog, which) -> finishWithFiles(Arrays.asList(target)))
-                        .setNegativeButton("Cancel", null).create();
+                        .setTitle(Lang.replacePrompt(name))
+                        .setPositiveButton(Lang.t("Replace"), (dialog, which) -> finishWithFiles(Arrays.asList(target)))
+                        .setNegativeButton(Lang.t("Cancel"), null).create();
                 Motion.dialog(prompt); prompt.show();
             } else {
                 try {
                     if (!target.createNewFile()) throw new IOException("Could not create file");
                     finishWithFiles(Arrays.asList(target));
-                } catch (IOException e) { Toast.makeText(this, "Could not create a file here.", Toast.LENGTH_LONG).show(); }
+                } catch (IOException e) { TToast.makeText(this, "Could not create a file here.", Toast.LENGTH_LONG).show(); }
             }
         }
     }

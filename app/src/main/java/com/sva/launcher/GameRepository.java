@@ -32,8 +32,7 @@ final class GameRepository {
     static final class ImportResult {
         int added, duplicates, skipped;
         String message() {
-            return added + " added · " + duplicates + " duplicate" + (duplicates == 1 ? "" : "s")
-                    + " · " + skipped + " skipped";
+            return Lang.importSummary(added, duplicates, skipped);
         }
     }
 

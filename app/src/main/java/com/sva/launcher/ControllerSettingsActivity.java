@@ -61,7 +61,7 @@ public final class ControllerSettingsActivity extends MotionActivity {
     }
 
     private void updatePrompt() {
-        prompt.setText("Button " + (step + 1) + " of " + mapping.keys.length + "\n\n" + ControllerProfile.NAMES[step]);
+        prompt.setText(Lang.buttonOf(step + 1, mapping.keys.length, ControllerProfile.NAMES[step]));
     }
 
     private void handleBack() {
@@ -81,8 +81,8 @@ public final class ControllerSettingsActivity extends MotionActivity {
         mapping.keys[step++] = event.getKeyCode();
         if (step < mapping.keys.length) updatePrompt();
         else {
-            try { mapping.save(this, mappingDevice); Toast.makeText(this, "Controller mapping saved.", Toast.LENGTH_SHORT).show(); }
-            catch (Exception e) { Toast.makeText(this, "Could not save mapping.", Toast.LENGTH_LONG).show(); }
+            try { mapping.save(this, mappingDevice); TToast.makeText(this, "Controller mapping saved.", Toast.LENGTH_SHORT).show(); }
+            catch (Exception e) { TToast.makeText(this, "Could not save mapping.", Toast.LENGTH_LONG).show(); }
             mappingDevice = null; renderList();
         }
         return true;

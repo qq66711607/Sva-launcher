@@ -110,10 +110,10 @@ public final class ScreensaverSettingsActivity extends MotionActivity {
                 || !caption.getText().toString().trim().equals(prefs.getString(ScreensaverPreferences.CAPTION, ""));
         if (!dirty) { finish(); return; }
         android.app.AlertDialog prompt = new android.app.AlertDialog.Builder(this, LiquidTheme.alertDialogTheme(this))
-                .setTitle("Save screensaver changes?")
-                .setMessage("Your album and caption have unsaved changes.")
-                .setPositiveButton("Save", (d, w) -> { if (save()) finish(); })
-                .setNegativeButton("Discard", (d, w) -> finish()).setNeutralButton("Keep editing", null).create();
+                .setTitle(Lang.t("Save screensaver changes?"))
+                .setMessage(Lang.t("Your album and caption have unsaved changes."))
+                .setPositiveButton(Lang.t("Save"), (d, w) -> { if (save()) finish(); })
+                .setNegativeButton(Lang.t("Discard"), (d, w) -> finish()).setNeutralButton(Lang.t("Keep editing"), null).create();
         Motion.dialog(prompt); prompt.show();
     }
 
@@ -155,7 +155,7 @@ public final class ScreensaverSettingsActivity extends MotionActivity {
         if (!ScreensaverPreferences.validAlbum(value)) { feedback.setText("Enter a Google Photos shared album link, or leave empty to use Home."); return false; }
         prefs.edit().putString(ScreensaverPreferences.ALBUM, value)
                 .putString(ScreensaverPreferences.CAPTION, caption.getText().toString().trim()).apply();
-        updateSource(); feedback.setText("Saved."); return true;
+        updateSource(); feedback.setText("Settings saved."); return true;
     }
     private void checkAlbum() {
         if (!save()) return;
@@ -178,11 +178,11 @@ public final class ScreensaverSettingsActivity extends MotionActivity {
     private int dp(int n) { return LiquidTheme.dp(this, n); }
     private EditText input(String label, String value) {
         SettingsUi.hint(page, label);
-        EditText edit = new EditText(this); edit.setText(value); edit.setSingleLine(true);
+        EditText edit = new TEditText(this); edit.setText(value); edit.setSingleLine(true);
         edit.setSelectAllOnFocus(true);
         edit.setInputType(android.text.InputType.TYPE_CLASS_TEXT | (label.startsWith("Separate")
                 ? android.text.InputType.TYPE_TEXT_VARIATION_URI : android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES));
-        edit.setHint(label.startsWith("Separate") ? "https://photos.app.goo.gl/…" : "Add a personal caption");
+        edit.setHint(Lang.t(label.startsWith("Separate") ? "https://photos.app.goo.gl/…" : "Add a personal caption"));
         SettingsUi.styleInput(edit, false); SettingsUi.add(page, edit); return edit;
     }
     @Override protected void onDestroy() { lifecycleWork.close(); worker.shutdownNow(); super.onDestroy(); }
