@@ -2,7 +2,9 @@ package com.sva.launcher;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.graphics.Matrix;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.os.Handler;
@@ -10,18 +12,21 @@ import android.os.Looper;
 import android.content.res.ColorStateList;
 import android.view.Gravity;
 import android.view.KeyEvent;
+import android.view.TextureView;
 import android.view.View;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.media3.common.C;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
+import androidx.media3.common.VideoSize;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.exoplayer.ExoPlayer;
-import androidx.media3.ui.PlayerView;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -36,8 +41,13 @@ import org.json.JSONObject;
 
 @UnstableApi
 public final class PlaybackActivity extends Activity {
+    /** HLS playlists that jump MEDIA-SEQUENCE push the player outside the live window. */
+    private static final int MAX_LIVE_RETRIES = 3;
     private ExoPlayer player;
-    private PlayerView playerView;
+    private TextureView textureView;
+    private ImageView freezeFrame;
+    private Bitmap freezeBuffer;
+    private int videoWidth, videoHeight;
     private LinearLayout infoPanel;
     private TextView message, programmeTitle, programmeTimes, nextProgramme;
     private ProgressBar programmeProgress;
@@ -46,6 +56,26 @@ public final class PlaybackActivity extends Activity {
     private String followingProgramme = "";
     private long programmeStartMs, programmeEndMs;
     private String activeDrmType = "";
+    private int liveRetries;
+    private boolean recovering;
+    /** 换源前落后直播边缘多少毫秒，重建后按这个值把位置拉回去。 */
+    private long liveOffsetMs = C.TIME_UNSET;
+    private boolean restoreOffset;
+    /** 播放中持续记录的 live offset：报错瞬间播放器时间轴已被清空，取不到值。 */
+    private long lastLiveOffsetMs = C.TIME_UNSET;
+    private int offsetTicks;
+    private final Runnable offsetTick = new Runnable() {
+        @Override public void run() {
+            if (player != null && player.getPlaybackState() == Player.STATE_READY) {
+                long offset = player.getCurrentLiveOffset();
+                if (offset != C.TIME_UNSET) {
+                    lastLiveOffsetMs = offset;
+                    if (++offsetTicks % 5 == 0) android.util.Log.d("SvaLive", "sample offset=" + offset);
+                }
+            }
+            handler.postDelayed(this, 2000);
+        }
+    };
     private JSONArray zapChannels;
     private JSONArray programmeSchedule;
     private int zapIndex;
@@ -83,9 +113,16 @@ public final class PlaybackActivity extends Activity {
 
         FrameLayout frame = new FrameLayout(this);
         frame.setBackgroundColor(Color.BLACK);
-        playerView = new PlayerView(this);
-        playerView.setUseController(false);
-        frame.addView(playerView, new FrameLayout.LayoutParams(-1, -1));
+        // TextureView 而非 SurfaceView：解码器重建时最后一帧留在视图里，不会黑屏
+        textureView = new TextureView(this);
+        frame.addView(textureView, new FrameLayout.LayoutParams(-1, -1));
+        textureView.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> fitVideo());
+        // 冻结帧遮罩：播放器重建解码器时盖住正在清空的 surface，避免黑屏闪一下
+        freezeFrame = new ImageView(this);
+        freezeFrame.setScaleType(ImageView.ScaleType.FIT_XY);
+        freezeFrame.setVisibility(View.GONE);
+        freezeFrame.setAlpha(1f);
+        frame.addView(freezeFrame, new FrameLayout.LayoutParams(-1, -1));
         infoPanel = new LinearLayout(this);
         infoPanel.setOrientation(LinearLayout.VERTICAL);
         infoPanel.setPadding(dp(26), dp(19), dp(26), dp(18));
@@ -94,7 +131,7 @@ public final class PlaybackActivity extends Activity {
         infoPanel.setElevation(dp(8));
         boolean initialFavorite = activeChannel != null ? activeChannel.optBoolean("favorite", false)
                 : playback.getBooleanExtra("favorite", false);
-        message = new TextView(this);
+        message = new TTextView(this);
         message.setText("Loading " + (initialFavorite ? "★ " : "") + currentChannelName + "…");
         message.setTextColor(LiquidTheme.text(this));
         message.setTextSize(12);
@@ -102,7 +139,7 @@ public final class PlaybackActivity extends Activity {
         message.setTypeface(LiquidTheme.font(this));
         message.setShadowLayer(dp(8), 0, 0, 0x44000000);
         infoPanel.addView(message);
-        programmeTitle = new TextView(this);
+        programmeTitle = new TTextView(this);
         programmeTitle.setTextColor(LiquidTheme.text(this));
         programmeTitle.setTextSize(23);
         programmeTitle.setTypeface(LiquidTheme.font(this));
@@ -116,13 +153,13 @@ public final class PlaybackActivity extends Activity {
         LinearLayout.LayoutParams progressParams = new LinearLayout.LayoutParams(-1, dp(4));
         progressParams.topMargin = dp(8);
         infoPanel.addView(programmeProgress, progressParams);
-        programmeTimes = new TextView(this);
+        programmeTimes = new TTextView(this);
         programmeTimes.setTextColor(LiquidTheme.secondaryText(this));
         programmeTimes.setTextSize(12);
         LinearLayout.LayoutParams timesParams = new LinearLayout.LayoutParams(-1, -2);
         timesParams.topMargin = dp(5);
         infoPanel.addView(programmeTimes, timesParams);
-        nextProgramme = new TextView(this);
+        nextProgramme = new TTextView(this);
         nextProgramme.setTextColor(LiquidTheme.secondaryText(this));
         nextProgramme.setTextSize(13);
         LinearLayout.LayoutParams nextParams = new LinearLayout.LayoutParams(-1, -2);
@@ -132,6 +169,7 @@ public final class PlaybackActivity extends Activity {
         messageParams.setMargins(dp(32), 0, dp(32), dp(28));
         frame.addView(infoPanel, messageParams);
         setContentView(frame);
+        handler.post(offsetTick);
         if (!updateProgrammeFromCache()) {
             updateProgramInfo(playback.getStringExtra("now"), playback.getLongExtra("nowStartMs", 0),
                     playback.getLongExtra("nowEndMs", 0), playback.getStringExtra("next"));
@@ -164,21 +202,57 @@ public final class PlaybackActivity extends Activity {
             Motion.show(infoPanel, false);
             message.setVisibility(View.VISIBLE);
             releasePlayer();
+            liveRetries = 0;
+            lastLiveOffsetMs = C.TIME_UNSET;
             player = IptvPlayback.create(this, request);
             player.setTrackSelectionParameters(player.getTrackSelectionParameters().buildUpon()
                     .setPreferredAudioLanguages("hi", "hin")
                     .build());
-            playerView.setPlayer(player);
+            player.setVideoTextureView(textureView);
             player.addListener(new Player.Listener() {
                 @Override public void onPlaybackStateChanged(int playbackState) {
                     if (playbackState == Player.STATE_READY) {
+                        liveRetries = 0;
+                        if (recovering) {
+                            boolean jumped = alignLiveOffset(0);
+                            handler.postDelayed(() -> unfreeze(), jumped ? 900 : 260);
+                        }
                         message.setText("Playing · Up/Down to change channel");
                         hideMessageAfter(2000);
                     }
                     else if (playbackState == Player.STATE_ENDED) message.setText("Stream ended · Back to return");
                 }
 
+                @Override public void onVideoSizeChanged(VideoSize size) {
+                    videoWidth = (int) (size.width * size.pixelWidthHeightRatio);
+                    videoHeight = size.height;
+                    fitVideo();
+                }
+
                 @Override public void onPlayerError(PlaybackException error) {
+                    if (isBehindLiveWindow(error) && liveRetries < MAX_LIVE_RETRIES) {
+                        liveRetries++;
+                        // TextureView 会自己留住最后一帧；这层遮罩是保险，getBitmap() 是同步的，不用等
+                        recovering = true;
+                        freezeLastFrame();
+                        if (player == null) return;
+                        liveOffsetMs = player.getCurrentLiveOffset();
+                        // 报错瞬间时间轴已清空（实测返回 TIME_UNSET），回退到播放中采样到的最后一个值
+                        if (liveOffsetMs == C.TIME_UNSET) liveOffsetMs = lastLiveOffsetMs;
+                        restoreOffset = liveOffsetMs != C.TIME_UNSET;
+                        android.util.Log.d("SvaLive", "error offset=" + liveOffsetMs + " last=" + lastLiveOffsetMs
+                                + " pos=" + player.getCurrentPosition());
+                        try {
+                            player.seekToDefaultPosition();
+                            player.prepare();
+                            player.play();
+                        } catch (RuntimeException ignored) {
+                            recovering = false;
+                            unfreezeImmediately();
+                            showError("Could not play this channel. The stream or codec may not be supported by the TV.");
+                        }
+                        return;
+                    }
                     if (!activeDrmType.isEmpty() || containsDrmFailure(error)) {
                         showError(("clearkey".equals(activeDrmType) ? "ClearKey" : "Widevine")
                                 + " playback failed. Check the channel license settings and TV support.");
@@ -196,6 +270,99 @@ public final class PlaybackActivity extends Activity {
                     ? "Could not start Widevine playback. Check the channel DRM settings."
                     : "Could not start this stream. Check the stream URL and playlist options.");
         }
+    }
+
+    /**
+     * 换源后恢复原来的直播落后量。seekToDefaultPosition() 用的是默认偏移
+     * （约 3×TARGETDURATION），如果换源前只落后几秒，直接默认偏移会白退十几秒 ——
+     * 这段差值必须补回来，剩下的才是两个清晰度之间真实的时延差。
+     */
+    private boolean alignLiveOffset(int attempt) {
+        if (!restoreOffset || player == null) return false;
+        long now = player.getCurrentLiveOffset();
+        if (now == C.TIME_UNSET || liveOffsetMs == C.TIME_UNSET) {
+            if (attempt < 3) handler.postDelayed(() -> alignLiveOffset(attempt + 1), 300);
+            else restoreOffset = false;
+            return false;
+        }
+        restoreOffset = false;
+        long delta = now - liveOffsetMs;
+        android.util.Log.d("SvaLive", "align now=" + now + " target=" + liveOffsetMs + " delta=" + delta);
+        if (Math.abs(delta) > 800) {
+            player.seekTo(Math.max(0L, player.getCurrentPosition() + delta));
+            return true;
+        }
+        return false;
+    }
+
+    /** 复刻 PlayerView 默认的 RESIZE_MODE_FIT：保持比例，多余部分留黑边。 */
+    private void fitVideo() {
+        if (textureView == null || videoWidth <= 0 || videoHeight <= 0) return;
+        float viewWidth = textureView.getWidth(), viewHeight = textureView.getHeight();
+        if (viewWidth <= 0 || viewHeight <= 0) return;
+        float scale = Math.min(viewWidth / videoWidth, viewHeight / videoHeight);
+        Matrix matrix = new Matrix();
+        matrix.setScale(scale * videoWidth / viewWidth, scale * videoHeight / viewHeight,
+                viewWidth / 2f, viewHeight / 2f);
+        textureView.setTransform(matrix);
+    }
+
+    /**
+     * TextureView 在解码器断开后通常自己保留最后一帧；这一层是保险，
+     * 用 getBitmap() 同步取帧（SurfaceView 的 PixelCopy 在本机返回 ERROR_SOURCE_INVALID）。
+     */
+    private void freezeLastFrame() {
+        if (freezeFrame == null || textureView == null) return;
+        try {
+            Bitmap snapshot = textureView.getBitmap();
+            if (snapshot == null) {
+                android.util.Log.d("SvaFreeze", "snapshot null");
+                return;
+            }
+            android.util.Log.d("SvaFreeze", "snapshot " + snapshot.getWidth() + "x" + snapshot.getHeight());
+            freezeBuffer = snapshot;
+            freezeFrame.setImageBitmap(freezeBuffer);
+            freezeFrame.setAlpha(1f);
+            freezeFrame.setVisibility(View.VISIBLE);
+        } catch (Throwable error) {
+            android.util.Log.d("SvaFreeze", "snapshot failed " + error);
+        }
+    }
+
+    /** 首帧出来后再淡出遮罩，避免"冻住 → 黑一下 → 动"的三段式观感。 */
+    private void unfreeze() {
+        if (freezeFrame == null || freezeFrame.getVisibility() != View.VISIBLE) {
+            recovering = false;
+            return;
+        }
+        recovering = false;
+        android.util.Log.d("SvaFreeze", "unfreeze");
+        freezeFrame.animate().alpha(0f).setDuration(220).withEndAction(() -> {
+            if (freezeFrame != null && !recovering) {
+                freezeFrame.setVisibility(View.GONE);
+                freezeFrame.setImageDrawable(null);
+            }
+        }).start();
+    }
+
+    private void unfreezeImmediately() {
+        if (freezeFrame == null) return;
+        freezeFrame.animate().cancel();
+        freezeFrame.setAlpha(1f);
+        freezeFrame.setVisibility(View.GONE);
+        freezeFrame.setImageDrawable(null);
+    }
+
+    private boolean isBehindLiveWindow(Throwable error) {
+        if (error instanceof PlaybackException
+                && ((PlaybackException) error).errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
+            return true;
+        }
+        for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+            String type = cause.getClass().getSimpleName();
+            if (type.contains("BehindLiveWindow") || type.contains("BehindLiveWindowException")) return true;
+        }
+        return false;
     }
 
     private boolean containsDrmFailure(Throwable error) {
@@ -238,7 +405,7 @@ public final class PlaybackActivity extends Activity {
         message.setText((nowFav ? "★ " : "") + currentChannelName);
         Motion.show(infoPanel, false);
         hideMessageAfter(2500);
-        Toast.makeText(this, (nowFav ? "Added to" : "Removed from") + " favourites: " + currentChannelName, Toast.LENGTH_SHORT).show();
+        TToast.makeText(this, Lang.favouriteToast(nowFav, currentChannelName), Toast.LENGTH_SHORT).show();
     }
 
     private void changeChannel(int direction) {
@@ -347,9 +514,10 @@ public final class PlaybackActivity extends Activity {
         long elapsed = Math.max(0L, Math.min(duration, System.currentTimeMillis() - programmeStartMs));
         programmeProgress.setProgress((int) Math.min(1000L, elapsed * 1000L / duration));
         long minutesLeft = Math.max(0L, (programmeEndMs - System.currentTimeMillis() + 59999L) / 60000L);
-        java.text.DateFormat time = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT, Locale.getDefault());
-        programmeTimes.setText(time.format(new Date(programmeStartMs)) + " – " + time.format(new Date(programmeEndMs))
-                + " · " + minutesLeft + " min left");
+        java.text.DateFormat time = java.text.DateFormat.getTimeInstance(
+                java.text.DateFormat.SHORT, Lang.locale());
+        programmeTimes.setText(Lang.programmeWindow(
+                time.format(new Date(programmeStartMs)), time.format(new Date(programmeEndMs)), minutesLeft));
     }
 
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
@@ -363,14 +531,17 @@ public final class PlaybackActivity extends Activity {
     @Override protected void onDestroy() {
         if (hideMessage != null) handler.removeCallbacks(hideMessage);
         handler.removeCallbacks(programmeTick);
+        handler.removeCallbacks(offsetTick);
         releasePlayer();
         Motion.cancelTree(infoPanel);
         super.onDestroy();
     }
 
     private void releasePlayer() {
+        recovering = false;
+        unfreezeImmediately();
         if (player == null) return;
-        if (playerView != null) playerView.setPlayer(null);
+        player.clearVideoTextureView(textureView);
         player.release();
         player = null;
     }
